@@ -1,0 +1,22 @@
+data "aws_lambda_function" "existing_lambda" {
+  function_name = "lambda_function_10"
+}
+
+resource "null_resource" "update_lambda_environment" {
+
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      aws lambda update-function-configuration \
+        --function-name "lambda_function_10" \
+        --environment-variables "key1=kanna7"
+    EOT
+  }
+}
+provider "aws" {
+  region = "ap-south-1"
+  profile = "default"
+}
