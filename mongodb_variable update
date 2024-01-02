@@ -1,0 +1,81 @@
+$listOfFunctions = @("_LM_Utility_Config_Get",
+"_LM_USER_PRINT_Post")
+
+
+$LambdaDepEnv = "oupdev"
+$lambdaRegion = "eu-west-1"
+$LambdaDepEnvAf = "oupdevaf"  
+$lambdaRegionAf = "af-south-1"
+$LambdaDepEnvSa = "oupdevsa"
+$lambdaRegionSa = "sa-east-1"
+$LambdaDepEnvSyd = "oupdevsyd"
+$lambdaRegionSyd = "ap-southeast-2"
+
+function Update-LambdaAlias {
+	Param([string] $functionName, [string] $targetRegion)
+
+	Write-Host "Publishing latest version --- $functionName -- $targetRegion"
+	$latestPublishedVersion = aws lambda publish-version --function-name $functionName --region $targetRegion --output json --query 'Version' | ConvertFrom-Json
+	Write-Host $("Latest Version: " + $latestPublishedVersion)
+	Write-Host "Updating alias --- $functionName"
+	$aliasUpdated = aws lambda update-alias --function-name $functionName --function-version $latestPublishedVersion --name API_ALIAS --region $targetRegion
+	Write-Host "Alias updated --- $functionName"
+}
+
+Function Update-LambdaVariables {
+	Param([string] $functionName, [string] $targetRegion, [string] $sourceMongoUri, [string] $targetMongoUri)
+	$configJson = "$($functionName)$('-input.json')"
+	$FUNCTION_CONFIG = aws lambda get-function-configuration --function-name $functionName --region=$targetRegion | Out-String | ConvertFrom-Json
+	$FUNCTION_CONFIG | ConvertTo-Json -depth 10 | Out-File -Encoding ascii $configJson
+
+	$lambdaJsonRequest = @{
+		Environment = @{
+			Variables = @{
+			}
+		}
+	}
+
+	$FUNCTION_CONFIG.Environment.Variables | Get-Member -MemberType NoteProperty | ForEach-Object {
+		$key = $_.Name
+		$replacedValue = $FUNCTION_CONFIG.Environment.Variables."$key".Replace($sourceMongoUri, $targetMongoUri)
+		$varItem = @{"$key" = $replacedValue}
+		$lambdaJsonRequest.Environment.Variables += $varItem
+	}
+	$cliInputJson = "$($functionName)$('-output.json')"
+	$lambdaJsonRequest | ConvertTo-Json -depth 10 | Out-File -Encoding ascii $cliInputJson
+	
+	Write-Host "Updating Lambda Environment Variables --- $functionName"
+	aws lambda update-function-configuration --function-name $functionName --cli-input-json file://$cliInputJson --region=$targetRegion
+	Start-Sleep -s 60
+    Update-LambdaAlias $functionName $targetRegion
+}
+
+    Write-Host "Updating Regional Lambdas --- $LambdaDepEnv"
+    $listOfFunctions.ForEach({
+		Update-LambdaVariables "$($LambdaDepEnv)$_" $lambdaRegion $env:SOURCE_MONGO_URI $env:TARGET_MONGO_URI 
+    })
+	Write-Host "Regional Lambdas Updated --- $LambdaDepEnv"
+	
+	
+    Write-Host "Updating Regional Lambdas --- $LambdaDepEnvAf"
+    $listOfFunctions.ForEach({
+		Update-LambdaVariables "$($LambdaDepEnvAf)$_" $lambdaRegionAf $env:SOURCE_CLOUDFRONT_ID $env:TARGET_CLOUDFRONT_ID 
+    })
+	Write-Host "Regional Lambdas Updated --- $LambdaDepEnvAf"
+	
+	Write-Host "Updating Regional Lambdas --- $LambdaDepEnvSa"
+    $listOfFunctions.ForEach({
+		Update-LambdaVariables "$($LambdaDepEnvSa)$_" $lambdaRegionSa $env:SOURCE_CLOUDFRONT_ID $env:TARGET_CLOUDFRONT_ID 
+    })
+	Write-Host "Regional Lambdas Updated --- $LambdaDepEnvSa"
+	
+		Write-Host "Updating Regional Lambdas --- $LambdaDepEnvSyd"
+    $listOfFunctions.ForEach({
+		Update-LambdaVariables "$($LambdaDepEnvSyd)$_" $lambdaRegionSyd $env:SOURCE_CLOUDFRONT_ID $env:TARGET_CLOUDFRONT_ID 
+    })
+	Write-Host "Regional Lambdas Updated --- $LambdaDepEnvSyd"
+	
+	
+mongodb+srv://ankan:ilz1s8da2tqEm80n@aws-multi-region-1.nhlh5.mongodb.net/oupdev?readPreference=nearest&w=1
+	
+	
