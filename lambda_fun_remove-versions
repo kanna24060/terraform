@@ -1,0 +1,68 @@
+# to remove lambda function published versions 
+import boto3
+
+def delete_lambda_function(lambda_client, function_name, versions_to_keep):
+    response = lambda_client.list_versions_by_function(
+        FunctionName=function_name
+    )
+    versions = response['Versions']
+    versions.sort(key=lambda v: v['Version'])
+    total_versions = len(versions)
+    versions_to_delete = total_versions - versions_to_keep
+
+    for version in versions:
+        if version['Version'] == '$LATEST':  # Skip the latest version
+            continue
+
+        versions_to_delete -= 1
+        if versions_to_delete <= 0:  # break if all versions deleted
+            break
+
+        version_number = version['Version']
+        lambda_client.delete_function(
+            FunctionName=function_name,
+            Qualifier=version_number
+        )
+
+    return True
+
+def lambda_handler(event, context):
+    lambda_client = boto3.client('lambda')
+
+    # List of Lambda function names to delete
+    function_names = [
+        'oupdev_LM_Utility_Config_Get',
+        'oupdev_LM_EBook_Search_Indexer',
+        'oupdev_LM_USER_PRINT_Post',
+        'oupdev_LM_Utility_Initialize_Post',
+        'oupdev_LM_LTI_Verify_Book',
+        'oupdev_LM_Locale_File_Upload',
+        'oupdev_LM_AUTH_SignIn',
+        'oupdev_LM_Report_Send',
+        'oupdev_LM_EReader-initialize',
+        'oupdev_LM_USERS_Reset_Level_Post',
+        'oupdev_LM_EReader-GetAllAnotation',
+        'oupdev_LM_Publish-GetJobStatus',
+        'oupdev_LM_Publish-UpdateMetaData',
+        'oupdev_LM_Locales_Get',
+        'oupdev_LM_EBook_Epub_Extractor',
+        'oupdev_LM_Report_Receive',
+        'oupdev_LM_AUTH_ACES',
+        'oupdev_LM_AUTH_ResetPassword',
+        'oupdev_LM_AUTH_ForgotPassword',
+        'oupdev_LM_AUTH_Verify',
+        'oupdev_LM_Ereader_App_GetInstallers',
+        'oupdev_LM_AUTH_Content_Url'
+        # Add more function names as needed
+    ]
+
+    versions_to_keep = 30  # Number of versions to keep for each function
+
+    for function_name in function_names:
+        success = delete_lambda_function(lambda_client, function_name, versions_to_keep)
+        if success:
+            print(f"Successfully deleted old versions for {function_name}")
+        else:
+            print(f"Failed to delete old versions for {function_name}")
+
+    return True
